@@ -1,3 +1,4 @@
+import inspect
 import click
 from . import CTAComputeClient
 
@@ -14,9 +15,9 @@ def cli(ctx, verbose=False):
     ctx.obj.login()
 
 def bind_function(c):
-    def func(obj):
+    def func(obj, *args, **kwargs):
         logging.debug(f"calling {c}")
-        getattr(obj, c)()
+        getattr(obj, c)(*args, **kwargs)
 
     return func
 
@@ -28,7 +29,20 @@ for n in ['list_files',
 
     command_name = n.replace('_', '-')
 
-    cli.command(name=command_name)(click.pass_obj(bind_function(n)))
+    f = click.pass_obj(bind_function(n))
+    
+    inspect.signature(getattr(CTAComputeClient, n))
+
+    for p in inspect.signature(getattr(CTAComputeClient, n)).parameters.values():
+        if p.name == "self":
+            continue
+        
+        if p.default == p.empty:
+            f = click.argument(p.name)(f)
+        else:
+            f = click.option(f"--{p.name}", default=p.default)(f)
+
+    f = cli.command(name=command_name)(f)
 
 if __name__ == "__main__":
     cli(obj={})
